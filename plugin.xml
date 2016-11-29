@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8'?>
+<plugin id="cordova-plugin-ssh" version="0.0.1" xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android">
+  <name>SshPlugin</name>
+  <js-module name="SshPlugin" src="www/SshPlugin.js">
+    <clobbers target="cordova.plugins.SshPlugin" />
+  </js-module>
+  <platform name="android">
+    <config-file parent="/*" target="res/xml/config.xml">
+      <feature name="SshPlugin">
+        <param name="android-package" value="org.uproxy.cordovasshplugin.SshPlugin" />
+      </feature>
+    </config-file>
+    <config-file parent="/*" target="AndroidManifest.xml"></config-file>
+    <source-file src="src/android/SshPlugin.java" target-dir="src/cordova-plugin-ssh/SshPlugin" />
+    <framework src="src/android/build.gradle" custom="true" type="gradleReference" />
+  </platform>
+</plugin>
