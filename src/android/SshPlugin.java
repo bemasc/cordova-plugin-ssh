@@ -1,12 +1,15 @@
 package org.uproxy.cordovasshplugin;
 
-import android.util.Base64;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.support.v4.content.LocalBroadcastManager;
+import android.util.Log;
 
 import com.trilead.ssh2.Connection;
 import com.trilead.ssh2.ConnectionInfo;
 import com.trilead.ssh2.DynamicPortForwarder;
-
-import java.io.IOException;
 
 import org.apache.cordova.CordovaPlugin;
 import org.apache.cordova.CallbackContext;
@@ -15,27 +18,23 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import org.uproxy.cordovasshplugin.SshPluginService;
+
 public class SshPlugin extends CordovaPlugin {
     private Connection connection = null;
     private DynamicPortForwarder proxy = null;
 
     @Override
     public boolean execute(String action, JSONArray args, final CallbackContext callbackContext) throws JSONException {
-        if (action.equals("connectWithPublicKey")) {
+
+        if (action.equals("connect")) {
             String host = args.getString(0);
             int port = args.getInt(1);
             String user = args.getString(2);
             String key = args.getString(3);
+            String password = args.getString(4);
             // TODO: hostKey
-            connectWithPublicKey(host, port, user, key, callbackContext);
-            return true;
-        } else if (action.equals("connectWithPassword")) {
-            String host = args.getString(0);
-            int port = args.getInt(1);
-            String user = args.getString(2);
-            String password = args.getString(3);
-            // TODO: hostKey
-            connectWithPassword(host, port, user, password, callbackContext);
+            connect(host, port, user, key, password, callbackContext);
             return true;
         } else if (action.equals("disconnect")) {
             disconnect(callbackContext);
@@ -51,88 +50,62 @@ public class SshPlugin extends CordovaPlugin {
         return false;
     }
 
-    private void connectWithPublicKey(final String host, final int port, final String user, final String key, final CallbackContext callbackContext) {
-      connection = new Connection(host, port);
-      cordova.getThreadPool().execute(new Runnable() {
-        public void run() {
-          if (connection == null) {
-            callbackContext.error("Connection disappeared!");
-            return;
-          }
+    private void connect(final String host, final int port, final String user, final String key, final String password, final CallbackContext callbackContext) {
+      listenOnce("connectResult", callbackContext);
 
-          byte[] keyBytes = Base64.decode(key, Base64.DEFAULT);
-          char[] keyChars = new char[keyBytes.length];
-          for (int i = 0; i < keyBytes.length; ++i) {
-            keyChars[i] = (char) keyBytes[i];
-          }
-          try {
-              ConnectionInfo info = connection.connect();
-              String password = "";
-              if (connection.authenticateWithPublicKey(user, keyChars, password)) {
-                callbackContext.success();
-              } else {
-                callbackContext.error("Authentication failed");
-              }
-          } catch (IOException e) {
-              callbackContext.error(e.toString());
-          }
-        }
-      });
-    }
+      Context context = this.cordova.getActivity();
+      Intent connectIntent = new Intent(context, SshPluginService.class);
+      connectIntent.putExtra("host", host);
+      connectIntent.putExtra("port", port);
+      connectIntent.putExtra("user", user);
+      connectIntent.putExtra("key", key);
+      connectIntent.putExtra("password", password);
+      context.startService(connectIntent);
 
-    private void connectWithPassword(final String host, final int port, final String user, final String password, final CallbackContext callbackContext) {
-      connection = new Connection(host, port);
-      cordova.getThreadPool().execute(new Runnable() {
-        public void run() {
-          if (connection == null) {
-            callbackContext.error("Connection disappeared!");
-            return;
-          }
-
-          try {
-              ConnectionInfo info = connection.connect();
-              if (connection.authenticateWithPassword(user, password)) {
-                callbackContext.success();
-              } else {
-                callbackContext.error("Authentication failed");
-              }
-          } catch (IOException e) {
-              callbackContext.error(e.toString());
-          }
-        }
-      });
     }
 
     private void disconnect(final CallbackContext callbackContext) {
-      if (connection == null) {
-        callbackContext.error("No connection to close");
-        return;
-      }
-      connection.close();
-      connection = null;
+      Context context = this.cordova.getActivity().getApplicationContext(); 
+      Intent stopIntent = new Intent(context, SshPluginService.class);
+      context.stopService(stopIntent);
       callbackContext.success();
     }
 
     private void startProxy(final int port, final CallbackContext callbackContext) {
-      try {
-        proxy = connection.createDynamicPortForwarder(port);
-        callbackContext.success();
-      } catch (IOException e) {
-        callbackContext.error(e.toString());
-      }
+      listenOnce("startProxyResult", callbackContext);
+
+      Intent startProxyIntent = new Intent("startProxy");
+      startProxyIntent.putExtra("port", port);
+      sendIntent(startProxyIntent);
     }
 
     private void stopProxy(final CallbackContext callbackContext) {
-      if (proxy == null) {
-        callbackContext.error("No proxy to stop");
-        return;
-      }
-      try {
-        proxy.close();
-        proxy = null;
-        callbackContext.success();
-      } catch (IOException e) {
-        callbackContext.error(e.toString());
-      }
+      listenOnce("stopProxyResult", callbackContext);
+      sendIntent(new Intent("stopProxy"));
     }
+
+  private void sendIntent(final Intent intent) {
+    Context context = this.cordova.getActivity().getApplicationContext(); 
+    LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
+  }
+
+  private void listenOnce(final String intentName, final CallbackContext callbackContext) {
+    BroadcastReceiver receiver = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+        boolean success = intent.getBooleanExtra("success", false);
+        if (success) {
+          callbackContext.success();
+        } else {
+          callbackContext.error("Failed");
+        }
+        // Single-use receiver.
+        LocalBroadcastManager.getInstance(context).unregisterReceiver(this);
+      }
+    };
+
+    Context context = this.cordova.getActivity().getApplicationContext(); 
+    LocalBroadcastManager.getInstance(context).registerReceiver(
+        receiver, new IntentFilter(intentName));
+  }
 }

@@ -28,7 +28,7 @@ var app = {
     // 'pause', 'resume', etc.
     onDeviceReady: function() {
         this.receivedEvent('deviceready');
-        cordova.plugins.SshPlugin.connectWithPassword('104.198.157.2', 22, 'bemasc', 'chae7Moh').then(function() {
+        cordova.plugins.SshPlugin.connect('104.198.157.2', 22, 'bemasc', '', 'chae7Moh').then(function() {
           console.log("connected!");
           return cordova.plugins.SshPlugin.startProxy(9051);
         }).then(function() {

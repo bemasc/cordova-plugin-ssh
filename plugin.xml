@@ -11,7 +11,12 @@
       </feature>
     </config-file>
     <config-file parent="/*" target="AndroidManifest.xml"></config-file>
-    <source-file src="src/android/SshPlugin.java" target-dir="src/cordova-plugin-ssh/SshPlugin" />
+    <config-file target="AndroidManifest.xml" parent="/manifest/application">
+      <service
+        android:name="org.uproxy.cordovasshplugin.SshPluginService"
+        android:exported="false" />
+    </config-file>
+    <source-file src="src/android" target-dir="src/cordova-plugin-ssh/SshPlugin" />
     <framework src="src/android/build.gradle" custom="true" type="gradleReference" />
   </platform>
 </plugin>

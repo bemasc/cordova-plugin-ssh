@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 
 dependencies {
+    compile 'com.android.support:appcompat-v7:23.4.0'
     compile 'org.connectbot:sshlib:2.2.4'
 }
 

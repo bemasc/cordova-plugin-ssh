@@ -1,14 +1,9 @@
 var exec = require('cordova/exec');
 
-exports.connectWithPublicKey = function(host, port, user, key) {
+// Either key or password must be specified
+exports.connect = function(host, port, user, key, password) {
   return new Promise(function(F, R) {
-    exec(F, R, "SshPlugin", "connectWithPublicKey", [host, port, user, key]);
-  });
-};
-
-exports.connectWithPassword = function(host, port, user, password) {
-  return new Promise(function(F, R) {
-    exec(F, R, "SshPlugin", "connectWithPassword", [host, port, user, password]);
+    exec(F, R, "SshPlugin", "connect", [host, port, user, key, password]);
   });
 };
 
