@@ -8,20 +8,21 @@ import android.content.IntentFilter;
 import android.os.Binder;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
-import android.util.Base64;
 import android.util.Log;
 
-import java.io.IOException;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
-import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.ConnectionInfo;
-import com.trilead.ssh2.DynamicPortForwarder;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import org.uproxy.cordovasshplugin.SshWrapper;
 
 public class SshPluginService extends Service {
-  private static Connection connection = null;
-  private static DynamicPortForwarder proxy = null;
-
   private static final String LOG_TAG = "SshPluginService";
+
+  private SortedMap<Integer, SshWrapper> connections = new TreeMap();
 
   @Override
   public IBinder onBind(Intent intent) {
@@ -30,134 +31,99 @@ public class SshPluginService extends Service {
 
   @Override
   public int onStartCommand(Intent intent, int flags, int startId) {
-    Log.i(LOG_TAG, "start command");
-    String host = intent.getStringExtra("host");
-    int port = intent.getIntExtra("port", -1);
-    String user = intent.getStringExtra("user");
-    String key = intent.getStringExtra("key");
-    String password = intent.getStringExtra("password");
-    connect(host, port, user, key, password);
-
     return START_NOT_STICKY;
   }
 
   @Override
   public void onDestroy() {
     Log.i(LOG_TAG, "destroy");
-    try {
-      if (proxy != null) {
-        proxy.close();
-      }
-      if (connection != null) {
-        // connection.close() does network operations so it has to happen off-thread.
-        disconnect();
-      }
-    } catch (IOException e) {
-      Log.e(LOG_TAG, e.toString());
-    }
   }
 
   private BroadcastReceiver messageReceiver =
       new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-          if ("startProxy".equals(intent.getAction())) {
-            int port = intent.getIntExtra("port", -1);
-            startProxy(port);
-          } else if ("stopProxy".equals(intent.getAction())) {
-            stopProxy();
+          int connectionId = intent.getIntExtra("connectionId", -1);
+          String requestId = intent.getStringExtra("requestId");
+          String command = intent.getStringExtra("command");
+          if ("getNewConnection".equals(command)) {
+            fulfill(intent, getNewConnection());
+          } else if ("getIds".equals(command)) {
+            fulfill(intent, getIds());
+          } else {
+            if (connections.containsKey(connectionId)) {
+              connections.get(connectionId).execute(intent);
+            } else {
+              reject(intent, "No such connection");
+            }
           }
         }
       };
 
   @Override
   public void onCreate() {
-    IntentFilter broadcastFilter = new IntentFilter("startProxy");
-    broadcastFilter.addAction("stopProxy");
     LocalBroadcastManager.getInstance(this)
-        .registerReceiver(messageReceiver, broadcastFilter);
+        .registerReceiver(messageReceiver, new IntentFilter("toService"));
   }
 
-    private void connect(final String host, final int port, final String user, final String key, final String password) {
-      final LocalBroadcastManager broadcastManager = LocalBroadcastManager.getInstance(this);
-      connection = new Connection(host, port);
-      new Thread(
-          new Runnable() {
-              public void run() {
-                  boolean success = false;
-                  if (connection == null) {
-                    Log.e(LOG_TAG, "Connection disappeared!");
-                  } else {
-                    String nonNullPassword = "";
-                    if (password != null) {
-                      nonNullPassword = password;
-                    }
-                    try {
-                        ConnectionInfo info = connection.connect();
-                        if (key == null || key.isEmpty()) {
-                          success = connection.authenticateWithPassword(user, nonNullPassword);
-                        } else {
-                          byte[] keyBytes = Base64.decode(key, Base64.DEFAULT);
-                          char[] keyChars = new char[keyBytes.length];
-                          for (int i = 0; i < keyBytes.length; ++i) {
-                            keyChars[i] = (char) keyBytes[i];
-                          }
-                          success = connection.authenticateWithPublicKey(user, keyChars, nonNullPassword);
-                        }
-                        
-                    } catch (IOException e) {
-                        Log.e(LOG_TAG, e.toString());
-                    }
-                  }
+  public void fulfill(Intent request, JSONObject payload) {
+    reply(request, payload.toString(), true);
+  }
 
-                  Intent connectBroadcast = new Intent("connectResult");
-                  connectBroadcast.putExtra("success", success);
-                  broadcastManager.sendBroadcast(connectBroadcast);
-              }
-            }, "Initiate connection")
-        .start();
-    }
+  public void fulfill(Intent request, JSONArray payload) {
+    reply(request, payload.toString(), true);
+  }
 
-    private void disconnect() {
-      // connection.close() does network operations so it has to happen off-thread.
-      new Thread(
-          new Runnable() {
-              public void run() {
-                  connection.close();
-                  connection = null;
-              }
-            }, "Disconnect")
-        .start();
-    }
+  public void fulfill(Intent request, String payload) {
+    reply(request, JSONObject.quote(payload), true);
+  }
 
-    private void startProxy(final int port) {
-      boolean success = false;
-      try {
-        proxy = connection.createDynamicPortForwarder(port);
-        success = true;
-      } catch (IOException e) {
-        Log.e(LOG_TAG, e.toString());
-      }
-      Intent connectBroadcast = new Intent("startProxyResult");
-      connectBroadcast.putExtra("success", success);
-      LocalBroadcastManager.getInstance(this).sendBroadcast(connectBroadcast);
+  public void fulfill(Intent request, Number payload) {
+    try {
+      reply(request, JSONObject.numberToString(payload), true);
+    } catch (JSONException e) {
+      reject(request, e.toString());
     }
+  }
 
-    private void stopProxy() {
-      boolean success = false;
-      if (proxy == null) {
-        Log.e(LOG_TAG, "No proxy to stop");
-      } else {
-        try {
-          proxy.close();
-          proxy = null;
-          success = true;
-        } catch (IOException e) {
-          Log.e(LOG_TAG, e.toString());
-        }
-      }
-      Intent connectBroadcast = new Intent("stopProxyResult");
-      connectBroadcast.putExtra("success", success);
-      LocalBroadcastManager.getInstance(this).sendBroadcast(connectBroadcast);
+  public void fulfill(Intent request) {
+    reply(request, null, true);
+  }
+
+  public void reject(Intent request, String message) {
+    reply(request, message, false);
+  }
+
+  private void reply(Intent request, String payload, boolean success) {
+    Intent reply = new Intent("fromService");
+    reply.putExtra("connectionId", request.getIntExtra("connectionId", -1));
+    reply.putExtra("requestId", request.getStringExtra("requestId"));
+    reply.putExtra("command", request.getStringExtra("command"));
+    reply.putExtra("success", success);
+    if (payload != null) {
+      reply.putExtra("payload", payload);
     }
+    LocalBroadcastManager.getInstance(this).sendBroadcast(reply);
+  }
+
+  public void emit(int connectionId, String requestId, int payload) {
+    Intent fakeRequest = new Intent("toService");
+    fakeRequest.putExtra("connectionId", connectionId);
+    fakeRequest.putExtra("requestId", requestId);
+    fulfill(fakeRequest, payload);
+  }
+
+  private int getNewConnection() {
+    int newId = connections.isEmpty() ? 0 : connections.lastKey() + 1;
+    connections.put(newId, new SshWrapper(this, newId));
+    return newId;
+  }
+
+  private JSONArray getIds() {
+    return new JSONArray(connections.keySet());
+  }
+
+  public void remove(int connectionId) {
+    connections.remove(connectionId);
+  }
 }

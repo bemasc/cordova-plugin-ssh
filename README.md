@@ -13,36 +13,47 @@ This plugin currently only supports Android.
 
 ### Javascript API
 
+This plugin provides a class representing an SSH connection, exposed as
 ```typescript
-connect(host:string, port:number, username:string, privateKey:string, password:string) : Promise<void>;
+new cordova.plugins.SshPlugin.Connection();
 ```
 
-Connects to the server and authenticates with the private key (if provided)
-and/or password (if provided).
-
+It has the following interface:
 ```typescript
-disconnect(): Promise<void>;
+interface Connection {
+  // Connect to the destination by private key, password, or both
+  connect(host:string, port:number, user:string, privateKey:string, password:string) : Promise<void>;
+
+  // Disconnect from the destination (and stop the proxy if it is running).
+  disconnect(): Promise<void>;
+
+  // Start a SOCKS5 proxy on a specified port on localhost, forwarding through the
+  // SSH tunnel.  This can only be called after connection succeeds.
+  startProxy(port): Promise<void>;
+
+  // Stop the SOCKS5 proxy but leave the connection open.
+  stopProxy(): Promise<void>;
+
+  // Get the ID of this connection.
+  getId(): Promise<number>;
+
+  // Get information about the state of this connection.
+  getConnectionInfo(): Promise<{state:number; host:string; port:number; user:string;}
+
+  // Register an event listener, to be called when state changes occur.
+  onStateChange(listener:(state:number) => void): void;
+}
 ```
 
-Disconnects from the server
+Additionally, `Connection` has some important static attributes
 
-```typescript
-startProxy(port): Promise<void>
-```
-
-Starts a SOCKS5 proxy running on the specified port on `localhost`, forwarding
-through the SSH tunnel.  Call `connect()` first and wait for it to succeed;
-otherwise this function will fail.
-
-```typescript
-stopProxy(): Promise<void>
-```
-Stop the SOCKS5 proxy.  The connection remains open.
+ * `Connection.State` is an enum of number-valued states.
+ * `Connection.getAll()` returns a list of `Connection` objects representing all extant connections.
 
 ### TODO
 
  * Reconnect after transient disconnections
  * Provide automatic port selection if the user calls `startProxy(0)`
- * Allow multiple active connections
  * Notify the app if the connection fails
  * Wake up the app if something happens while the Activity is not active
+ * Remove requirement that the WebView supports `Promise`.

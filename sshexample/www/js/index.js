@@ -20,6 +20,7 @@ var app = {
     // Application Constructor
     initialize: function() {
         document.addEventListener('deviceready', this.onDeviceReady.bind(this), false);
+        document.addEventListener('click', this.onClick.bind(this), false);
     },
 
     // deviceready Event Handler
@@ -28,13 +29,17 @@ var app = {
     // 'pause', 'resume', etc.
     onDeviceReady: function() {
         this.receivedEvent('deviceready');
-        cordova.plugins.SshPlugin.connect('104.198.157.2', 22, 'bemasc', '', 'chae7Moh').then(function() {
-          console.log("connected!");
-          return cordova.plugins.SshPlugin.startProxy(9051);
+    },
+
+    onClick: function() {
+        var conn = new cordova.plugins.SshPlugin.Connection();
+        conn.connect('104.198.157.2', 22, 'bemasc', '', 'chae7Moh').then(function() {
+            console.log("connected!");
+            return conn.startProxy(9051);
         }).then(function() {
-          console.log('proxy started!');
+            console.log('proxy started!');
         }, function(err) {
-          console.error(err);
+            console.error(err);
         });
     },
 
