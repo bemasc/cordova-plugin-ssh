@@ -10,6 +10,7 @@ import com.trilead.ssh2.ConnectionMonitor;
 import com.trilead.ssh2.DynamicPortForwarder;
 
 import java.io.IOException;
+import java.util.Random;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -144,19 +145,30 @@ public class SshWrapper {
   }
 
   private void startProxy(final Intent request) {
-    final int port = request.getIntExtra("port", -1);
-    try {
-      info.put("proxyPort", port);
-    } catch (JSONException e) {
-      service.reject(request, e.toString());
-      return;
+    startProxy(request, 5);
+  }
+
+  private void startProxy(final Intent request, int retries) {
+    int port = request.getIntExtra("port", -1);
+    boolean retry = false;
+    if (port <= 0) {
+      retry = true;
+      int low = 1025, high = 65536;
+      port = (new Random()).nextInt(high - low) + low;
     }
 
     try {
       proxy = connection.createDynamicPortForwarder(port);
+      info.put("proxyPort", port);
       changeState(STATE_PROXYING);
-      service.fulfill(request);
+      service.fulfill(request, port);
     } catch (IOException e) {
+      if (retry && retries > 0) {
+        startProxy(request, retries - 1);
+      } else {
+        service.reject(request, e.toString());
+      }
+    } catch (JSONException e) {
       service.reject(request, e.toString());
     }
   }

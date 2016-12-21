@@ -29,7 +29,9 @@ interface Connection {
 
   // Start a SOCKS5 proxy on a specified port on localhost, forwarding through the
   // SSH tunnel.  This can only be called after connection succeeds.
-  startProxy(port): Promise<void>;
+  // Returns the proxy port number. If |port| is 0 or absent, this will be chosen
+  // automatically.
+  startProxy(port?:number): Promise<number>;
 
   // Stop the SOCKS5 proxy but leave the connection open.
   stopProxy(): Promise<void>;
@@ -53,6 +55,5 @@ Additionally, `Connection` has some important static attributes
 ### TODO
 
  * Use network state events to avoid polling for reconnection.
- * Provide automatic port selection if the user calls `startProxy(0)`
  * Wake up the app if something happens while the Activity is not active
  * Remove requirement that the WebView supports `Promise`.

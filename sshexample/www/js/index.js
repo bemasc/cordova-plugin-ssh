@@ -38,9 +38,9 @@ var app = {
         });
         conn.connect('104.198.157.2', 22, 'bemasc', '', 'chae7Moh').then(function() {
             console.log("connected!");
-            return conn.startProxy(9051);
-        }).then(function() {
-            console.log('proxy started!');
+            return conn.startProxy();
+        }).then(function(port) {
+            console.log('proxy started on port ' + port);
         }, function(err) {
             console.error(err);
         });

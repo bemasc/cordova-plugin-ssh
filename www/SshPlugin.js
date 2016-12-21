@@ -57,7 +57,7 @@ Connection.prototype.disconnect = function() {
 };
 
 Connection.prototype.startProxy = function(port) {
-  return this.exec_("startProxy", [port]);
+  return this.exec_("startProxy", [port || 0]);
 };
 
 Connection.prototype.stopProxy = function() {
