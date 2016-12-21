@@ -69,8 +69,11 @@ Connection.prototype.getConnectionInfo = function() {
 };
 
 Connection.prototype.onStateChange = function(listener) {
+  var onFail = function(fail) {
+    console.warn("Got failed state change event: " + fail);
+  };
   this.id_.then(function(id) {
-    exec(listener, listener, "SshPlugin", "onStateChange", [this.id]);
+    exec(listener, onFail, "SshPlugin", "onStateChange", [id]);
   });
 };
 

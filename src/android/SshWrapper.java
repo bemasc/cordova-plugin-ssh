@@ -6,6 +6,7 @@ import android.util.Log;
 
 import com.trilead.ssh2.Connection;
 import com.trilead.ssh2.ConnectionInfo;
+import com.trilead.ssh2.ConnectionMonitor;
 import com.trilead.ssh2.DynamicPortForwarder;
 
 import java.io.IOException;
@@ -26,9 +27,10 @@ public class SshWrapper {
   private Connection connection = null;
   private DynamicPortForwarder proxy = null;
 
-  final SshPluginService service;
-  final int id;
-  JSONObject info = new JSONObject();
+  private final SshPluginService service;
+  private final int id;
+  private JSONObject info = new JSONObject();
+  private SshConnectionMonitor monitor = new SshConnectionMonitor();
 
   SshWrapper(SshPluginService service, int id) {
     this.service = service;
@@ -70,6 +72,8 @@ public class SshWrapper {
       info.put("host", host);
       info.put("port", port);
       info.put("user", user);
+      info.put("key", key);
+      info.put("password", password);
     } catch (JSONException e) {
       Log.e(LOG_TAG, e.toString());
       service.reject(request, e.toString());
@@ -77,48 +81,53 @@ public class SshWrapper {
     }
 
     connection = new Connection(host, port);
+    connection.addConnectionMonitor(monitor);
     new Thread(
       new Runnable() {
         public void run() {
-          if (connection == null) {
-            String msg = "Connection disappeared!";
-            Log.e(LOG_TAG, msg);
-            service.reject(request, msg);
-            return;
-          }
-
-          String nonNullPassword = "";
-          if (password != null) {
-            nonNullPassword = password;
-          }
-          boolean success = false;
           try {
-            ConnectionInfo info = connection.connect();
-            if (key == null || key.isEmpty()) {
-              success = connection.authenticateWithPassword(user, nonNullPassword);
+            if (initiateConnection()) {
+              changeState(STATE_CONNECTED);
+              service.fulfill(request);
             } else {
-              byte[] keyBytes = Base64.decode(key, Base64.DEFAULT);
-              char[] keyChars = new char[keyBytes.length];
-              for (int i = 0; i < keyBytes.length; ++i) {
-                keyChars[i] = (char) keyBytes[i];
-              }
-              success = connection.authenticateWithPublicKey(user, keyChars, nonNullPassword);
+              service.reject(request, "Connection failed");
             }
-          } catch (IOException e) {
-            Log.e(LOG_TAG, e.toString());
+          } catch (Exception e) {
             service.reject(request, e.toString());
-            return;
-          }
-
-          if (success) {
-            changeState(STATE_CONNECTED);
-            service.fulfill(request);
-          } else {
-            service.reject(request, "Connection failed");
           }
         }
       }, "Initiate connection")
     .start();
+  }
+
+  private boolean initiateConnection() throws Exception {
+    String host = info.optString("host");
+    int port = info.optInt("port");
+    String user = info.optString("user");
+    String key = info.optString("key");
+    String password = info.optString("password");
+
+    if (connection == null) {
+      throw new NullPointerException("Connection disappeared!");
+    }
+
+    String nonNullPassword = "";
+    if (password != null) {
+      nonNullPassword = password;
+    }
+    boolean success = false;
+    ConnectionInfo info = connection.connect();
+    if (key == null || key.isEmpty()) {
+      success = connection.authenticateWithPassword(user, nonNullPassword);
+    } else {
+      byte[] keyBytes = Base64.decode(key, Base64.DEFAULT);
+      char[] keyChars = new char[keyBytes.length];
+      for (int i = 0; i < keyBytes.length; ++i) {
+        keyChars[i] = (char) keyBytes[i];
+      }
+      success = connection.authenticateWithPublicKey(user, keyChars, nonNullPassword);
+    }
+    return success;
   }
 
   private void disconnect(final Intent request) {
@@ -137,6 +146,14 @@ public class SshWrapper {
 
   private void startProxy(final Intent request) {
     final int port = request.getIntExtra("port", -1);
+    try {
+      info.put("proxyPort", port);
+    } catch (JSONException e) {
+      Log.e(LOG_TAG, e.toString());
+      service.reject(request, e.toString());
+      return;
+    }
+
     try {
       proxy = connection.createDynamicPortForwarder(port);
       changeState(STATE_PROXYING);
@@ -176,6 +193,40 @@ public class SshWrapper {
       service.emit(this.id, "onStateChange", state);
     } catch (JSONException e) {
       Log.e(LOG_TAG, e.toString());
+    }
+  }
+
+  private class SshConnectionMonitor implements ConnectionMonitor {
+    @Override
+    public void connectionLost(Throwable reason) {
+      changeState(STATE_DISCONNECTED);
+
+      // Retry loop
+      new Thread(
+        new Runnable() {
+          public void run() {
+            try {
+              connection.close();
+              while (info.optInt("state") == STATE_DISCONNECTED) {
+                Thread.sleep(15000);
+                if (initiateConnection()) {
+                  if (proxy != null) {
+                    // Recreate the proxy on the new connection.
+                    int port = info.optInt("proxyPort");
+                    proxy = connection.createDynamicPortForwarder(port);
+                    changeState(STATE_PROXYING);
+                  } else {
+                    changeState(STATE_CONNECTED);
+                  }
+                  break;
+                }
+              }
+            } catch (Exception e) {
+              Log.e(LOG_TAG, "Abandoning retry loop: " + e.toString());
+            }
+          }
+        }, "Retry loop")
+      .start();
     }
   }
 }

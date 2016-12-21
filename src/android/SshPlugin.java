@@ -48,8 +48,7 @@ public class SshPlugin extends CordovaPlugin {
       String payload = intent.getStringExtra("payload");
       PluginResult.Status status = success ? PluginResult.Status.OK : PluginResult.Status.ERROR;
       PluginResult result = new PluginResult(status, payload);
-      String command = intent.getStringExtra("command");
-      if (command.equals("onStateChange")) {
+      if (requestId.equals("onStateChange")) {
         // Perennial listener for events.
         result.setKeepCallback(true);
       } else {

@@ -52,8 +52,7 @@ Additionally, `Connection` has some important static attributes
 
 ### TODO
 
- * Reconnect after transient disconnections
+ * Use network state events to avoid polling for reconnection.
  * Provide automatic port selection if the user calls `startProxy(0)`
- * Notify the app if the connection fails
  * Wake up the app if something happens while the Activity is not active
  * Remove requirement that the WebView supports `Promise`.

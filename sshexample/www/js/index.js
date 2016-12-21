@@ -33,6 +33,9 @@ var app = {
 
     onClick: function() {
         var conn = new cordova.plugins.SshPlugin.Connection();
+        conn.onStateChange(function(state) {
+          console.log("SSH state changed to " + state);
+        });
         conn.connect('104.198.157.2', 22, 'bemasc', '', 'chae7Moh').then(function() {
             console.log("connected!");
             return conn.startProxy(9051);
