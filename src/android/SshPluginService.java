@@ -91,6 +91,7 @@ public class SshPluginService extends Service {
   }
 
   public void reject(Intent request, String message) {
+    Log.w(LOG_TAG, "Rejecting: " + message);
     reply(request, message, false);
   }
 

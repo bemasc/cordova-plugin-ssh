@@ -75,7 +75,6 @@ public class SshWrapper {
       info.put("key", key);
       info.put("password", password);
     } catch (JSONException e) {
-      Log.e(LOG_TAG, e.toString());
       service.reject(request, e.toString());
       return;
     }
@@ -149,7 +148,6 @@ public class SshWrapper {
     try {
       info.put("proxyPort", port);
     } catch (JSONException e) {
-      Log.e(LOG_TAG, e.toString());
       service.reject(request, e.toString());
       return;
     }
@@ -159,7 +157,6 @@ public class SshWrapper {
       changeState(STATE_PROXYING);
       service.fulfill(request);
     } catch (IOException e) {
-      Log.e(LOG_TAG, e.toString());
       service.reject(request, e.toString());
     }
   }
@@ -167,9 +164,7 @@ public class SshWrapper {
   private void stopProxy(final Intent request) {
     boolean success = false;
     if (proxy == null) {
-      String msg = "No proxy to stop";
-      Log.e(LOG_TAG, msg);
-      service.reject(request, msg);
+      service.reject(request, "No proxy to stop");
     } else {
       try {
         proxy.close();
@@ -177,7 +172,6 @@ public class SshWrapper {
         changeState(STATE_CONNECTED);
         service.fulfill(request);
       } catch (IOException e) {
-        Log.e(LOG_TAG, e.toString());
         service.reject(request, e.toString());
       }
     }
