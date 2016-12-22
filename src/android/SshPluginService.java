@@ -26,7 +26,8 @@ public class SshPluginService extends Service {
 
   @Override
   public IBinder onBind(Intent intent) {
-    return null;  // No need to support binding this service.
+    // TODO: Return a custom binder that provides direct access to this.
+    return new Binder();
   }
 
   @Override

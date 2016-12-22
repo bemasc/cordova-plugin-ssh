@@ -2,17 +2,18 @@ package org.uproxy.cordovasshplugin;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.util.Pair;
 
-import com.trilead.ssh2.Connection;
-import com.trilead.ssh2.ConnectionInfo;
-import com.trilead.ssh2.DynamicPortForwarder;
-
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,10 +28,29 @@ import org.json.JSONObject;
 import org.uproxy.cordovasshplugin.SshPluginService;
 
 public class SshPlugin extends CordovaPlugin {
-  private Connection connection = null;
-  private DynamicPortForwarder proxy = null;
+  private static final String LOG_TAG = "SshPlugin";
 
   private Map<Pair<Integer, String>, CallbackContext> listeners = new HashMap();
+
+  private List<Intent> pendingCommands = new ArrayList();
+
+  private boolean serviceIsUp = false;
+  ServiceConnection serviceWatcher = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName className, IBinder service) {
+      Log.i(LOG_TAG, "Service is up.  Draining " + pendingCommands.size() + " pending commands.");
+      serviceIsUp = true;
+      for (Intent i: pendingCommands) {
+        sendIntent(i);
+      }
+      pendingCommands.clear();
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName arg0) {
+      serviceIsUp = false;
+    }
+  };
 
   BroadcastReceiver receiver = new BroadcastReceiver() {
     @Override
@@ -62,10 +82,14 @@ public class SshPlugin extends CordovaPlugin {
   @Override
   protected void pluginInitialize() {
     Context context = this.cordova.getActivity();
-    context.startService(new Intent(context, SshPluginService.class));
+    Intent intent = new Intent(context, SshPluginService.class);
+    context.startService(intent);
 
     LocalBroadcastManager.getInstance(context).registerReceiver(
         receiver, new IntentFilter("fromService"));
+
+    // Wait (asynchronously) for service to come up.
+    context.bindService(intent, serviceWatcher, Context.BIND_AUTO_CREATE);
   }
 
   @Override
@@ -110,6 +134,11 @@ public class SshPlugin extends CordovaPlugin {
   }
 
   private void sendIntent(final Intent intent) {
+    // TODO: Switch to using bind() and direct method calls.
+    if (!serviceIsUp) {
+      pendingCommands.add(intent);
+      return;
+    }
     Context context = this.cordova.getActivity().getApplicationContext(); 
     LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
   }
