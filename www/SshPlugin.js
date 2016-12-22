@@ -7,7 +7,7 @@ function getNewConnection_() {
 }
 
 function Connection(id) {
-  if (id) {
+  if (typeof id === 'number') {
     this.id_ = Promise.resolve(id);
   } else {
     this.id_ = getNewConnection_();
