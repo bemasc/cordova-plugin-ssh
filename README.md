@@ -21,6 +21,12 @@ new cordova.plugins.SshPlugin.Connection();
 It has the following interface:
 ```typescript
 interface Connection {
+  // Create a new Connection object.  If |id| is omitted, this makes a new
+  // Connection.  Otherwise, it makes a new Javascript-side Connection
+  // object but only makes a new Java-side connection if there is not already
+  // one with this id.
+  new (id?:string):Connection;
+
   // Connect to the destination by private key, password, or both
   connect(host:string, port:number, user:string, privateKey:string, password:string) : Promise<void>;
 
@@ -37,7 +43,7 @@ interface Connection {
   stopProxy(): Promise<void>;
 
   // Get the ID of this connection.
-  getId(): Promise<number>;
+  getId(): Promise<string>;
 
   // Get information about the state of this connection.
   getConnectionInfo(): Promise<{state:number; host:string; port:number; user:string;}

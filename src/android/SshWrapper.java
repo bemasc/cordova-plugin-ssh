@@ -29,11 +29,11 @@ public class SshWrapper {
   private DynamicPortForwarder proxy = null;
 
   private final SshPluginService service;
-  private final int id;
+  private final String id;
   private JSONObject info = new JSONObject();
   private SshConnectionMonitor monitor = new SshConnectionMonitor();
 
-  SshWrapper(SshPluginService service, int id) {
+  SshWrapper(SshPluginService service, String id) {
     this.service = service;
     this.id = id;
     try {

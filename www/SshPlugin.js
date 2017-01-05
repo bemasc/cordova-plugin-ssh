@@ -1,17 +1,13 @@
 var exec = require('cordova/exec');
 
-function getNewConnection_() {
+function getConnection_(id) {
   return new Promise(function(F, R) {
-    exec(F, R, "SshPlugin", "getNewConnection", []);
-  });
+    exec(F, R, "SshPlugin", "getConnection", [id]);
+  }).then(JSON.parse);
 }
 
 function Connection(id) {
-  if (typeof id === 'number') {
-    this.id_ = Promise.resolve(id);
-  } else {
-    this.id_ = getNewConnection_();
-  }
+  this.id_ = getConnection_(id);
 }
 
 Connection.State = {
@@ -23,7 +19,7 @@ Connection.State = {
 
 Connection.getAll = function() {
   return new Promise(function(F, R) {
-    exec(F, R, "SshPlugin", "getIds", []);
+    exec(F, R, "SshPlugin", "getIds", [null]);
   }).then(function(ids) {
     return JSON.parse(ids).map(function(id) {
       return new Connection(id);

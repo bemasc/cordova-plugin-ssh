@@ -10,8 +10,9 @@ import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -22,7 +23,7 @@ import org.uproxy.cordovasshplugin.SshWrapper;
 public class SshPluginService extends Service {
   private static final String LOG_TAG = "SshPluginService";
 
-  private SortedMap<Integer, SshWrapper> connections = new TreeMap();
+  private Map<String, SshWrapper> connections = new HashMap();
 
   @Override
   public IBinder onBind(Intent intent) {
@@ -44,18 +45,18 @@ public class SshPluginService extends Service {
       new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-          int connectionId = intent.getIntExtra("connectionId", -1);
+          String connectionId = intent.getStringExtra("connectionId");
           String requestId = intent.getStringExtra("requestId");
           String command = intent.getStringExtra("command");
-          if ("getNewConnection".equals(command)) {
-            fulfill(intent, getNewConnection());
+          if ("getConnection".equals(command)) {
+            fulfill(intent, getConnection(connectionId));
           } else if ("getIds".equals(command)) {
             fulfill(intent, getIds());
           } else {
             if (connections.containsKey(connectionId)) {
               connections.get(connectionId).execute(intent);
             } else {
-              reject(intent, "No such connection");
+              reject(intent, "No such connection: " + connectionId + ", among " + connections.size());
             }
           }
         }
@@ -98,7 +99,7 @@ public class SshPluginService extends Service {
 
   private void reply(Intent request, String payload, boolean success) {
     Intent reply = new Intent("fromService");
-    reply.putExtra("connectionId", request.getIntExtra("connectionId", -1));
+    reply.putExtra("connectionId", request.getStringExtra("connectionId"));
     reply.putExtra("requestId", request.getStringExtra("requestId"));
     reply.putExtra("command", request.getStringExtra("command"));
     reply.putExtra("success", success);
@@ -108,24 +109,29 @@ public class SshPluginService extends Service {
     LocalBroadcastManager.getInstance(this).sendBroadcast(reply);
   }
 
-  public void emit(int connectionId, String requestId, int payload) {
+  public void emit(String connectionId, String requestId, int payload) {
     Intent fakeRequest = new Intent("toService");
     fakeRequest.putExtra("connectionId", connectionId);
     fakeRequest.putExtra("requestId", requestId);
     fulfill(fakeRequest, payload);
   }
 
-  private int getNewConnection() {
-    int newId = connections.isEmpty() ? 0 : connections.lastKey() + 1;
-    connections.put(newId, new SshWrapper(this, newId));
-    return newId;
+  private String getConnection(String connectionId) {
+    if (connectionId == null || connectionId.length() == 0) {
+      connectionId = UUID.randomUUID().toString();
+    }
+    if (!connections.containsKey(connectionId)) {
+      connections.put(connectionId, new SshWrapper(this, connectionId));
+      Log.i(LOG_TAG, "Added new connection " + connectionId);
+    }
+    return connectionId;
   }
 
   private JSONArray getIds() {
     return new JSONArray(connections.keySet());
   }
 
-  public void remove(int connectionId) {
+  public void remove(String connectionId) {
     connections.remove(connectionId);
   }
 }

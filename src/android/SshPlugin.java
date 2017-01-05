@@ -30,7 +30,7 @@ import org.uproxy.cordovasshplugin.SshPluginService;
 public class SshPlugin extends CordovaPlugin {
   private static final String LOG_TAG = "SshPlugin";
 
-  private Map<Pair<Integer, String>, CallbackContext> listeners = new HashMap();
+  private Map<Pair<String, String>, CallbackContext> listeners = new HashMap();
 
   private List<Intent> pendingCommands = new ArrayList();
 
@@ -55,9 +55,9 @@ public class SshPlugin extends CordovaPlugin {
   BroadcastReceiver receiver = new BroadcastReceiver() {
     @Override
     public void onReceive(Context context, Intent intent) {
-      int connectionId = intent.getIntExtra("connectionId", -1);
+      String connectionId = intent.getStringExtra("connectionId");
       String requestId = intent.getStringExtra("requestId");
-      Pair<Integer, String> key = new Pair(connectionId, requestId);
+      Pair<String, String> key = new Pair(connectionId, requestId);
       if (!listeners.containsKey(key)) {
         return;
       }
@@ -94,11 +94,8 @@ public class SshPlugin extends CordovaPlugin {
 
   @Override
   public boolean execute(String command, JSONArray args, final CallbackContext callbackContext) throws JSONException {
-    int connectionId = -1;  // -1 means "not for any particular connection"
-    if (!command.equals("getNewConnection") &&
-        !command.equals("getIds")) {
-      connectionId = args.getInt(0);
-    }
+    // If command is "getIds" (and sometimes if it is "getConnection"), connectionId will be null.
+    String connectionId = args.isNull(0) ? null : args.getString(0);
     if (command.equals("onStateChange")) {
       return addListener(connectionId, "onStateChange", callbackContext);
     }
@@ -121,7 +118,7 @@ public class SshPlugin extends CordovaPlugin {
     } else if (command.equals("stopProxy")) {
     } else if (command.equals("getInfo")) {
     } else if (command.equals("getIds")) {
-    } else if (command.equals("getNewConnection")) {
+    } else if (command.equals("getConnection")) {
     } else {
       // Unknown command
       return false;
@@ -143,8 +140,8 @@ public class SshPlugin extends CordovaPlugin {
     LocalBroadcastManager.getInstance(context).sendBroadcast(intent);
   }
 
-  private boolean addListener(final int connectionId, final String requestId, final CallbackContext callbackContext) {
-    Pair<Integer, String> key = new Pair(connectionId, requestId);
+  private boolean addListener(final String connectionId, final String requestId, final CallbackContext callbackContext) {
+    Pair<String, String> key = new Pair(connectionId, requestId);
     if (listeners.containsKey(key)) {
       // requestId is usually a UUID, but not for "onStateChange", so this could
       // happen if the user tries to set two such listeners on the same connection.
